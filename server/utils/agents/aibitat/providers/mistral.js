@@ -7,6 +7,7 @@ const {
   tooledStream,
   tooledComplete,
   temperatureParam,
+  MAX_PARSE_RETRIES,
 } = require("./helpers/tooled.js");
 const { RetryError } = require("../error.js");
 const { normalizeMistralClient } = require("../../../AiProviders/mistral");
@@ -74,7 +75,7 @@ class MistralProvider extends InheritMultiple([Provider, UnTooled]) {
     });
   }
 
-  async stream(messages, functions = [], eventHandler = null) {
+  async stream(messages, functions = [], eventHandler = null, attempt = 0) {
     const useNative = this.supportsNativeToolCalling();
 
     if (!useNative) {
@@ -92,7 +93,7 @@ class MistralProvider extends InheritMultiple([Provider, UnTooled]) {
     );
 
     try {
-      return await tooledStream(
+      const result = await tooledStream(
         this.client,
         this.model,
         messages,
@@ -100,6 +101,23 @@ class MistralProvider extends InheritMultiple([Provider, UnTooled]) {
         eventHandler,
         { provider: this }
       );
+
+      if (result.retryWithError) {
+        if (attempt >= MAX_PARSE_RETRIES) {
+          return {
+            textResponse: result.retryWithError.content,
+            functionCall: null,
+          };
+        }
+        return this.stream(
+          [...messages, result.retryWithError],
+          functions,
+          eventHandler,
+          attempt + 1
+        );
+      }
+
+      return result;
     } catch (error) {
       console.error(error.message, error);
       if (error instanceof OpenAI.AuthenticationError) throw error;
@@ -114,7 +132,7 @@ class MistralProvider extends InheritMultiple([Provider, UnTooled]) {
     }
   }
 
-  async complete(messages, functions = []) {
+  async complete(messages, functions = [], attempt = 0) {
     const useNative = this.supportsNativeToolCalling();
 
     if (!useNative) {
@@ -137,7 +155,17 @@ class MistralProvider extends InheritMultiple([Provider, UnTooled]) {
       );
 
       if (result.retryWithError) {
-        return this.complete([...messages, result.retryWithError], functions);
+        if (attempt >= MAX_PARSE_RETRIES) {
+          return {
+            textResponse: result.retryWithError.content,
+            functionCall: null,
+          };
+        }
+        return this.complete(
+          [...messages, result.retryWithError],
+          functions,
+          attempt + 1
+        );
       }
 
       return result;
