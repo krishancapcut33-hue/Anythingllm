@@ -132,7 +132,7 @@ async function messageArrayCompressor(llm, messages = [], rawHistory = []) {
     var historyTokenCount = 0;
     var pairIndex = 0;
 
-    for (const history of rawHistory.reverse()) {
+    for (const history of [...rawHistory].reverse()) {
       const converted = convertToPromptHistory([history]);
       // convertToPromptHistory skips records with a non-string prompt or text.
       if (converted.length !== 2) continue;
@@ -272,7 +272,7 @@ async function messageStringCompressor(llm, promptArgs = {}, rawHistory = []) {
     var historyTokenCount = 0;
     var pairIndex = 0;
 
-    for (const history of rawHistory.reverse()) {
+    for (const history of [...rawHistory].reverse()) {
       const converted = convertToPromptHistory([history]);
       // convertToPromptHistory skips records with a non-string prompt or text.
       if (converted.length !== 2) continue;
